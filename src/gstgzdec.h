@@ -52,8 +52,15 @@
 G_BEGIN_DECLS
 
 #define GST_TYPE_GZDEC (gst_gzdec_get_type())
+#define GST_TYPE_METHOD (gst_method_get_type())
 G_DECLARE_FINAL_TYPE (GstGzdec, gst_gzdec,
     GST, GZDEC, GstElement)
+
+typedef enum {
+	ZLIB,
+	BZLIB
+} GstDecMethod;
+
 
 
 
