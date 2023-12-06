@@ -67,6 +67,7 @@
 #include "gstgzdec.h"
 
 #include <zlib.h>
+#include <bzlib.h>
 
 GST_DEBUG_CATEGORY_STATIC (gst_gzdec_debug);
 #define GST_CAT_DEFAULT gst_gzdec_debug
@@ -94,9 +95,8 @@ struct _GstGzdec
     gboolean silent;
     gboolean ready;
     z_stream stream;
+    bz_stream bz_stream;
     guint64 offset;
-
-    GstFlowReturn(* encode)(GstGzdec *, GstBuffer *, GstBuffer **);
 
 };
 
@@ -107,7 +107,7 @@ struct _GstGzdec
 static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS ("ANY")
+    GST_STATIC_CAPS ("application/gzip")
     );
 
 static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE ("src",
@@ -126,8 +126,7 @@ static void gst_gzdec_set_property (GObject * object,
     guint prop_id, const GValue * value, GParamSpec * pspec);
 static void gst_gzdec_get_property (GObject * object,
     guint prop_id, GValue * value, GParamSpec * pspec);
-static GstFlowReturn zlib_encode (GstGzdec * filter,
-    GstBuffer * inbuf, GstBuffer ** outbuf);
+
 static gboolean gst_gzdec_sink_event (GstPad * pad,
     GstObject * parent, GstEvent * event);
 static GstFlowReturn gst_gzdec_chain (GstPad * pad,
@@ -164,7 +163,6 @@ gst_gzdec_finalize (GObject * object)
 
 static void gst_gzdec_decompress_init (GstGzdec *dec){
   gint ret;
-    g_print ("Decompress init\n");
 
   g_return_if_fail (GST_IS_GZDEC (dec));
       gst_gzdec_decompress_end (dec);
@@ -175,8 +173,14 @@ static void gst_gzdec_decompress_init (GstGzdec *dec){
   dec->stream.opaque = Z_NULL;
   dec->stream.avail_in = 0;
   dec->stream.next_in = Z_NULL;
-
   ret = inflateInit2(&dec->stream, 32); ///////////////////////////////TODO
+  
+  /*
+  dec->bz_stream.bzalloc = NULL;
+  dec->bz_stream.bzfree = NULL;
+  dec->bz_stream.opaque = NULL;
+  ret = BZ2_bzDecompressInit (&dec->bz_stream, 0, 0);
+  */
   dec->ready = TRUE;
   dec->offset = 0;
 
@@ -190,7 +194,6 @@ gst_gzdec_change_state (GstElement * element, GstStateChange transition)
 {
     GstGzdec *dec = GST_GZDEC (element);
     GstStateChangeReturn ret;
-        g_print ("Changing state\n");
 
     GST_DEBUG_OBJECT (dec, "Changing gzdec state");
     ret = GST_ELEMENT_CLASS (parent_class)->change_state (element, transition);
@@ -199,10 +202,11 @@ gst_gzdec_change_state (GstElement * element, GstStateChange transition)
 
     switch (transition) {
         case GST_STATE_CHANGE_PAUSED_TO_READY:
-            g_print ("PAUSED TO READY.\n");
-
+            break;
+        case GST_STATE_CHANGE_NULL_TO_READY:
             gst_gzdec_decompress_init (dec);
             break;
+
         default:
             break;
     }
@@ -236,9 +240,9 @@ gst_gzdec_class_init (GstGzdecClass * klass)
       "FIXME:Generic Template Element", "Lenin Torres <<ttvleninn@gmail.com>>");
 
   gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&src_factory));
+  gst_static_pad_template_get (&src_factory));
   gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&sink_factory));
+  gst_static_pad_template_get (&sink_factory));
       
 }
 
@@ -261,8 +265,6 @@ gst_gzdec_init (GstGzdec * filter)
   filter->srcpad = gst_pad_new_from_static_template (&src_factory, "src");
   GST_PAD_SET_PROXY_CAPS (filter->srcpad);
   gst_element_add_pad (GST_ELEMENT (filter), filter->srcpad);
-  filter->encode       = zlib_encode;
-  gst_gzdec_decompress_init (filter);
 
   filter->silent = FALSE;
   
@@ -309,23 +311,45 @@ gst_gzdec_sink_event (GstPad * pad, GstObject * parent,
 {
   GstGzdec *filter;
   gboolean ret;
-
+  const gchar *mtype;
+  GstStructure *structure;
   filter = GST_GZDEC (parent);
-
+int lib;
   GST_LOG_OBJECT (filter, "Received %s event: %" GST_PTR_FORMAT,
       GST_EVENT_TYPE_NAME (event), event);
 
   switch (GST_EVENT_TYPE (event)) {
     case GST_EVENT_CAPS:
     {
+      g_print("CAPS\n");
       GstCaps *caps;
 
       gst_event_parse_caps (event, &caps);
-      /* do something with the caps */
+      GST_DEBUG_OBJECT (filter, "setcaps %" GST_PTR_FORMAT, caps);
+      structure = gst_caps_get_structure (caps, 0);
+      mtype = gst_structure_get_name (structure);
 
-      /* and forward */
+      if (g_str_equal (mtype, "application/x-gzip")) {
+              g_print("Caps negotiation %s \n", mtype);
+
+        GST_DEBUG_OBJECT (filter, "GZIP stream");
+        //lib = XZ_ZLIB;
+      } else if (g_str_equal (mtype, "application/x-bzip")) {
+              g_print("Caps negotiation %s \n", mtype);
+
+        GST_DEBUG_OBJECT (filter, "BZIP stream");
+        //lib = XZ_BZLIB;
+      } else {
+        GST_DEBUG_OBJECT (filter, "Invalid caps");
+        g_print("Caps  ERROR %s \n", mtype);
+        
+        gst_event_unref (event);
+        return FALSE;      
+  }
+     /* gst_event_parse_caps (event, &caps);
+      
       ret = gst_pad_event_default (pad, parent, event);
-      break;
+      break;*/
     }
     default:
       ret = gst_pad_event_default (pad, parent, event);
@@ -334,85 +358,6 @@ gst_gzdec_sink_event (GstPad * pad, GstObject * parent,
   return ret;
 }
 
-static GstFlowReturn
-zlib_encode (GstGzdec * filter,
-    GstBuffer * inbuf, GstBuffer ** outbuf)
-{
-  GstFlowReturn ret = GST_FLOW_OK;
-  GstMemory * memory_block;
-  GstMapInfo map_info_in, map_info_out;
-  int zlib_status = Z_OK;
-    
-  if (! gst_buffer_map(inbuf, &map_info_in, GST_MAP_READ))
-    return GST_FLOW_ERROR;
-
-  filter->stream.avail_in = map_info_in.size;
-  filter->stream.next_in  = map_info_in.data;
-
-  *outbuf = gst_buffer_new();
-  if (outbuf == NULL)
-    goto no_buffer;
-  
-  GST_BUFFER_OFFSET (*outbuf) = filter->stream.total_out;
-  gst_buffer_copy_into(inbuf, *outbuf, GST_BUFFER_COPY_METADATA, 0, -1);
-  g_print("New Buffer\n");
-  while (filter->stream.avail_in > 0 && zlib_status != Z_STREAM_END) {
-    g_print("Available = %d \n",filter->stream.avail_in );
-    memory_block = gst_allocator_alloc(NULL, 4096, NULL);
-
-    if (! gst_memory_map(memory_block, &map_info_out, GST_MAP_WRITE))
-      goto map_error;
-
-    filter->stream.avail_out = map_info_out.size;
-    filter->stream.next_out  = map_info_out.data;
-
-    zlib_status = inflate(&filter->stream, Z_NO_FLUSH);
-    switch (zlib_status) {
-    case Z_OK:
-    case Z_STREAM_END:
-    case Z_BUF_ERROR:
-      break;
-    default:
-      inflateEnd(&filter->stream);
-      goto decompress_error;
-    }
-
-    gst_memory_unmap(memory_block, &map_info_out);
-    gst_memory_resize(memory_block, 0, 4096 - filter->stream.avail_out);
-    
-    gst_buffer_append_memory(*outbuf, memory_block);
-  }
-
-  gst_buffer_unmap(inbuf, &map_info_in);
-
-  if (zlib_status == Z_STREAM_END)
-    return GST_FLOW_EOS;
-  
-  return GST_FLOW_OK;
-
- no_buffer:
-  {
-    gst_buffer_unmap(inbuf, &map_info_in);
-    GST_WARNING_OBJECT (filter, "could not allocate buffer");
-    return ret;
-  }
-
- map_error:
-  {
-    gst_buffer_unmap(inbuf, &map_info_in);
-    GST_WARNING_OBJECT (filter, "could not map memory object");
-    return ret;
-  }
-
- decompress_error:
-  {
-    gst_memory_unmap(memory_block, &map_info_out);
-    gst_buffer_unmap(inbuf, &map_info_in);
-    GST_WARNING_OBJECT (filter, "could not decompress stream: ZLIB_ERROR(%d)",
-         zlib_status);
-    return ret;
-  }
-}
 
 /* chain function
  * this function does the actual processing
@@ -422,15 +367,16 @@ gst_gzdec_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
 {
   GstFlowReturn flow = GST_FLOW_OK;
   GstBuffer *out;
+
   GstGzdec *dec;
   int err = Z_OK;
 
   dec = GST_GZDEC (parent);
 
-  if (dec->silent == FALSE)
-    g_print ("I'm plugged, chain .\n");
   GstMapInfo inmap = GST_MAP_INFO_INIT, outmap;
-
+    GstCaps *input_caps = gst_pad_get_current_caps(pad);
+  const gchar *caps_string = gst_caps_to_string(input_caps);
+        g_print("Received input caps: %s\n", caps_string);
   if (!dec->ready){
     GST_ELEMENT_ERROR (dec, LIBRARY, FAILED, (NULL), ("Decompressor not ready."));
     flow = GST_FLOW_FLUSHING;
@@ -439,22 +385,17 @@ gst_gzdec_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
     gst_buffer_map (buf, &inmap, GST_MAP_READ);
     dec->stream.next_in = (z_const Bytef *) inmap.data;
     dec->stream.avail_in = inmap.size;
-    g_print("Size of in = %d \n", dec->stream.avail_in);
-    GST_DEBUG_OBJECT (dec, "Input buffer size : dec->stream.avail_in = %d", dec->stream.avail_in);
         do
         {
-            g_print("DO \n");
-
             guint have;
-            //out = gst_buffer_new_and_alloc (dec->offset ? 1024*256: 1024*256);
-            out = gst_buffer_new_and_alloc (10);
+            out = gst_buffer_new_and_alloc (dec->offset ? 1024*256: 1024*256);
             gst_buffer_map (out, &outmap, GST_MAP_WRITE);
             dec->stream.next_out = (Bytef *) outmap.data;
             dec->stream.avail_out = outmap.size;
 
             gst_buffer_unmap (out, &outmap);
              err = inflate (&dec->stream, Z_NO_FLUSH);
-        switch (err)
+        /*switch (err)
         {
             case Z_OK:
                 g_print( "decodes correctley Z_OK [%s] \n", dec->stream.msg);
@@ -468,9 +409,7 @@ gst_gzdec_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
             default:
                 g_print( "decoder error: unknow code (%d) [%s] \n", err, dec->stream.msg);
                 break;
-        }
-
-            g_print("Avail_out = %d \n Size_out = %ld\n",dec->stream.avail_out , gst_buffer_get_size (out) );
+        }*/
             if (dec->stream.avail_out >= gst_buffer_get_size (out))
                 {
                     gst_buffer_unref (out);
@@ -479,8 +418,6 @@ gst_gzdec_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
 
             gst_buffer_resize (out, 0, gst_buffer_get_size (out) - dec->stream.avail_out);
             GST_BUFFER_OFFSET (out) = dec->stream.total_out - gst_buffer_get_size (out);
-
-
             GST_DEBUG_OBJECT (dec, "Push data on src pad");
             have = gst_buffer_get_size (out);
 
@@ -495,7 +432,7 @@ gst_gzdec_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
 
     gst_buffer_unmap (buf, &inmap);
     gst_buffer_unref (buf);
-    g_print("Buffer Sent\n\n");
+
     return flow; 
 
 }
