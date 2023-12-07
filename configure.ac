@@ -1,6 +1,6 @@
 AC_PREREQ([2.71])
 
-AC_INIT([gzdec], [1.0.0], [rodrigovalente1996@gmail.com])
+AC_INIT([gzdec], [1.0.0], [ttvleninn@gmail.com])
 AM_INIT_AUTOMAKE([foreign -Wall -Werror])
 
 AM_PROG_AR
@@ -11,11 +11,13 @@ AC_PROG_CC
 AC_ENABLE_SHARED
 
 
-PKG_CHECK_MODULES([ZLIB], [zlib], [AC_DEFINE(HAVE_ZLIB, 1, [Define if zlib is available])], [AC_MSG_ERROR([cannot build plugin, failed to find zlib (compilation requirement)])])
 
 PKG_CHECK_MODULES([GST], [gstreamer-1.0, gstreamer-base-1.0],[],[AC_MSG_ERROR([cannot build plugin, failed to find gstreamer-1.0 (compilation requirement)])])
+PKG_CHECK_MODULES([ZLIB], [zlib], [AC_DEFINE(HAVE_ZLIB, 1, [Define if zlib is available])], [AC_MSG_ERROR([cannot build plugin, failed to find zlib (compilation requirement)])])
 
-dnl BZ2 does not provide pkg-config
+dnl bzip2 does not provide pkg-config so it is necessary to 
+dnl do the linking manually
+
 save_LIBS=$LIBS
 LIBS="$LIBS -lbz2"
 AC_MSG_CHECKING([for BZ2_bzlibVersion in -lbz2])
@@ -30,9 +32,9 @@ AC_SUBST(BZ2_LIBS)
 
 AC_CONFIG_FILES([Makefile src/Makefile])
 
-AC_DEFINE(PLUGIN_DESCRIPTION,"GzDec a gzip & bzip decompresser gstreamer plugin")
-AC_DEFINE(GST_PACKAGE_NAME,"GzDec gstreamer plugin")
-AC_DEFINE(GST_PACKAGE_ORIGIN,"github.com/rodrigovb96/gzdec")
+AC_DEFINE(PLUGIN_DESCRIPTION,"gzip and bzip decompresser gstreamer plugin")
+AC_DEFINE(GST_PACKAGE_NAME,"gzdec gstreamer plugin")
+AC_DEFINE(GST_PACKAGE_ORIGIN,"github.com/tvlenin/gzdec")
 AC_DEFINE(GST_LICENSE,"LGPL")
 
 AC_OUTPUT

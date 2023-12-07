@@ -56,12 +56,11 @@ G_BEGIN_DECLS
 G_DECLARE_FINAL_TYPE (GstGzdec, gst_gzdec,
     GST, GZDEC, GstElement)
 
+// Enum to property Method
 typedef enum {
 	ZLIB,
 	BZLIB
 } GstDecMethod;
-
-
 
 
 G_END_DECLS

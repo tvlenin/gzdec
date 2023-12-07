@@ -149,10 +149,10 @@ gst_gzdec_decompress_end(GstGzdec *dec)
 
   if (dec->ready)
   {
+    GST_DEBUG_OBJECT(dec, "Finalize gzdec decompressing library");
     if (dec->method == ZLIB)
     {
-      GST_DEBUG_OBJECT(dec, "Finalize gzdec decompressing feature");
-      (void)inflateEnd(&dec->stream);
+      inflateEnd(&dec->stream);
       memset(&dec->stream, 0, sizeof(dec->stream));
     }
     else
@@ -167,7 +167,6 @@ gst_gzdec_decompress_end(GstGzdec *dec)
 static void
 gst_gzdec_finalize(GObject *object)
 {
-
   GstGzdec *dec = GST_GZDEC(object);
   GST_DEBUG_OBJECT(dec, "Finalize gzdec");
   gst_gzdec_decompress_end(dec);
@@ -177,8 +176,8 @@ gst_gzdec_finalize(GObject *object)
 static void gst_gzdec_decompress_init(GstGzdec *dec)
 {
   gint ret;
-
   g_return_if_fail(GST_IS_GZDEC(dec));
+
   gst_gzdec_decompress_end(dec);
   if (dec->method == ZLIB)
   {
@@ -203,6 +202,7 @@ static void gst_gzdec_decompress_init(GstGzdec *dec)
 static GstStateChangeReturn
 gst_gzdec_change_state(GstElement *element, GstStateChange transition)
 {
+  g_return_if_fail(element);
   GstGzdec *dec = GST_GZDEC(element);
   GstStateChangeReturn ret;
 
@@ -270,6 +270,8 @@ gst_gzdec_class_init(GstGzdecClass *klass)
 static void
 gst_gzdec_init(GstGzdec *dec)
 {
+  
+  g_return_if_fail(GST_IS_GZDEC(dec));
   dec->sinkpad = gst_pad_new_from_static_template(&sink_factory, "sink");
 
   gst_pad_set_chain_function(dec->sinkpad,
@@ -327,6 +329,8 @@ gst_gzdec_get_property(GObject *object, guint prop_id,
 /* GstElement vmethod implementations */
 static GstFlowReturn process_buffer_zlib(GstGzdec *dec, GstBuffer *buf)
 {
+  g_return_if_fail(GST_IS_GZDEC(dec));
+
   GstFlowReturn flow = GST_FLOW_OK;
   GstBuffer *outbuf;
   gint err;
@@ -373,6 +377,7 @@ static GstFlowReturn process_buffer_zlib(GstGzdec *dec, GstBuffer *buf)
 
 static GstFlowReturn process_buffer_bzlib(GstGzdec *dec, GstBuffer *buf)
 {
+  g_return_if_fail(GST_IS_GZDEC(dec));
   GstFlowReturn flow = GST_FLOW_OK;
   GstBuffer *outbuf;
   gint err;
@@ -464,7 +469,7 @@ gzdec_init(GstPlugin *gzdec)
    * exchange the string 'Template gzdec' with your description
    */
   GST_DEBUG_CATEGORY_INIT(gst_gzdec_debug, "gzdec",
-                          0, "Template gzdec");
+                          0, "Gzip decompress");
 
   return GST_ELEMENT_REGISTER(gzdec, gzdec);
 }
