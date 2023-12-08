@@ -14,12 +14,14 @@ Clone the git repository:
 ```
 git clone https://github.com/tvlenin/gzdec.git
 ```
+To select the GStreamer version to build the plugin use the ``--with-gst-version=x.x`` with the ``./configure`` as in the next example.
+
 
 Build and install the plugins:
 ```
 cd gzdec
 ./autogen.sh
-./configure
+./configure --with-gst-version=1.0
 make
 # Optional to install the plugins
 sudo make install
@@ -33,14 +35,17 @@ GST_PLUGIN_PATH=src/.libs/ gst-launch-1.0 ...
 
 ## Test the plugin
 
-```
-# create the text file and compress it with both compressors
+### Create the text file and compress it with both compressors
 
+```
 echo "Test file to be decompressed with gzdec" > test_file.txt 
 bzip2 -k test_file.txt
 gzip -k test_file.txt
+ ```
+ 
+ ### Decompress the files using gzdec with gstreamer-1.0
 
-#Decompress the files using gzdec
+ ```
 
 # Zlib
 GST_PLUGIN_PATH=src/.libs/ gst-launch-1.0 filesrc location=path/to/file.gz ! gzdec method=zlib ! filesink location=decompressed_zlib.txt 
@@ -49,6 +54,17 @@ GST_PLUGIN_PATH=src/.libs/ gst-launch-1.0 filesrc location=path/to/file.gz ! gzd
 GST_PLUGIN_PATH=src/.libs/ gst-launch-1.0 filesrc location=path/to/file.bz2 ! gzdec method=bzlib ! filesink location=decompressed_bzlib.txt 
 
 ```
+
+### Decompress the files using gzdec with gstreamer-0.10
+```
+# Zlib
+GST_PLUGIN_PATH=src/.libs/ gst-launch-0.10 filesrc location=path/to/file.gz ! gzdec method=zlib ! filesink location=decompressed_zlib.txt 
+
+#Bzlib
+GST_PLUGIN_PATH=src/.libs/ gst-launch-0.10 filesrc location=path/to/file.bz2 ! gzdec method=bzlib ! filesink location=decompressed_bzlib.txt 
+
+```
+
 ## Properties
 The gzdec plugin have the method property to select which decompress method use, by default it use zlib.
 ```
