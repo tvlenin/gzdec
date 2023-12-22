@@ -1,0 +1,97 @@
+name: "Build binaries on ubuntu"
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          submodules: 'true'
+      - name: Install software in Linux
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt update
+          sudo apt install -y libunwind-dev
+          sudo apt install -y build-essential autogen autoconf libtool
+          sudo apt install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-tools
+          sudo apt install -y bzip2 lzip libbz2-dev
+      - name : list docker installed packages (informative)
+        run: |
+          python --version
+          gcc --version
+      - name: Build project
+        run: |
+          ./autogen.sh
+          ./configure --with-gst-version=1.0
+          make
+          sudo make install
+      - name: Check
+        run: |
+          gst-inspect-1.0 --gst-plugin-load=/usr/local/lib/libgzdec.so gzdec
+      - name: Test
+        run: |
+          TEST_FILE_GZ=/tmp/gztestfile
+          TEST_FILE_BZ=/tmp/bztestfile
+
+          REF_TEST_FILE_GZ=/tmp/gztestfile.ref
+          REF_TEST_FILE_BZ=/tmp/bztestfile.ref
+
+          GST_OUT_FILE=/tmp/gstoutput
+
+          echo "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nam interdum ut quam id ultrices. Etiam tempus feugiat rhoncus." >& $TEST_FILE_GZ
+          cp $TEST_FILE_GZ $REF_TEST_FILE_GZ
+          #generate sample file
+          echo "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nam interdum ut quam id ultrices. Etiam tempus feugiat rhoncus." >& $TEST_FILE_BZ
+          cp $TEST_FILE_BZ $REF_TEST_FILE_BZ
+
+          # compress with gz
+          gzip -f $TEST_FILE_GZ
+          retVal=$?
+          if [ $retVal -ne 0 ]; then
+              echo "Failed to compress with gz"
+              exit 1
+          fi
+
+          #compress bzip2
+          bzip2 -f -z $TEST_FILE_BZ
+          retVal=$?
+          if [ $retVal -ne 0 ]; then
+              echo "Failed to compress with bzip2"
+              exit 1
+          fi
+
+          TEST_INPUT="${TEST_FILE_GZ}.gz"
+          gst-launch-1.0 --gst-plugin-load=/usr/local/lib/libgzdec.so -q filesrc location=${TEST_INPUT} ! gzdec method=0  ! filesink location=$GST_OUT_FILE
+
+          diff $GST_OUT_FILE $REF_TEST_FILE_GZ
+          retVal=$?
+          if [ $retVal -ne 0 ]; then
+              echo "gzip output do not match"
+              exit 1
+          else
+              echo "Test passed: gzip"
+          fi
+
+          #check bz decopression with property
+          rm $GST_OUT_FILE
+          TEST_INPUT="${TEST_FILE_BZ}.bz2"
+          gst-launch-1.0 --gst-plugin-load=/usr/local/lib/libgzdec.so -q filesrc location=${TEST_INPUT} ! gzdec method=1  ! filesink location=$GST_OUT_FILE
+
+          diff $GST_OUT_FILE $REF_TEST_FILE_BZ
+          retVal=$?
+          if [ $retVal -ne 0 ]; then
+              echo "bzip2 output do not match."
+              exit 1
+          else
+              echo "Test passed: bzip2"
+          fi

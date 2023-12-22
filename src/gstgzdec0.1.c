@@ -212,7 +212,8 @@ static void gst_gzdec_decompress_init(GstGzdec *dec)
     dec->stream.opaque = Z_NULL;
     dec->stream.avail_in = 0;
     dec->stream.next_in = Z_NULL;
-    ret = inflateInit2(&dec->stream, MAX_WBITS|16);
+    // MAX_WBITS + 16  to deflate (RFC 1952)
+    ret = inflateInit2(&dec->stream, MAX_WBITS + 16);
   }
   else
   {
